@@ -85,7 +85,6 @@ class Trainer():
             scoring=rmse_scorer(),
             n_jobs=-1,
         )
-        import ipdb; ipdb.set_trace()
         self.mlflow_log_metric('cv_test_rmse_mean', cv['test_score'].mean())
         self.mlflow_log_metric('cv_test_rmse_std', cv['test_score'].std())
         self.mlflow_log_metric('cv_train_rmse_mean', cv['train_score'].mean())
