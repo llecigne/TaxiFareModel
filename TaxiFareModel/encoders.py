@@ -1,4 +1,5 @@
 # from datetime import datetime, timezone
+import numpy as np
 import pandas as pd
 # from pandas._libs.tslibs import Hour
 # from pandas.core.base import DataError
@@ -37,3 +38,26 @@ class DistanceTransformer(BaseEstimator, TransformerMixin):
         assert isinstance(X, pd.DataFrame)
         X['distance'] = haversine_vectorized(X)
         return X[['distance']]
+
+class CyclicalTransformer(BaseEstimator, TransformerMixin):
+    """Compute the cos/sin angle of a cyclical numeric feature bounds within ordinal range."""
+    
+    def __init__(self, column, range=None):
+        self.column = column
+        self.range = range
+    
+    def fit(self, X, y=None):
+        if not self.range:
+            self.range = range(
+                X[self.column].min(), 
+                X[self.column].max()+1,
+            )
+        return self
+
+    def transform(self, X, y=None):
+        assert isinstance(X, pd.DataFrame)
+        angle_step = 2*np.pi/((self.range.stop-self.range.start) / self.range.step)
+        angle_index = (X[self.column]-self.range.start) / self.range.step
+        X[f'{self.column}_sin'] = np.sin(angle_index * angle_step)
+        X[f'{self.column}_cos'] = np.cos(angle_index * angle_step)
+        return X[[f'{self.column}_sin', f'{self.column}_cos']]

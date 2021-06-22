@@ -7,11 +7,11 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import RobustScaler, StandardScaler
 
-from TaxiFareModel.encoders import TimeFeaturesEncoder, DistanceTransformer
+from TaxiFareModel.encoders import CyclicalTransformer, TimeFeaturesEncoder, DistanceTransformer
 from TaxiFareModel.utils import compute_rmse
 
 MLFLOW_URI = "https://mlflow.lewagon.co/"
-EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 1"  
+EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 2"  
 
 class Trainer():
     def __init__(self, X, y):
@@ -27,7 +27,12 @@ class Trainer():
         """defines the pipeline as a class attribute"""
         pipe_time = make_pipeline(
             TimeFeaturesEncoder(column_name='pickup_datetime'),
-            StandardScaler()
+            ColumnTransformer([
+                ('cyclical-dow', CyclicalTransformer('dow', range(7)), ['dow']),
+                ('cyclical-hour', CyclicalTransformer('hour', range(24)), ['hour']),
+                ('cyclical-month', CyclicalTransformer('month', range(1, 13)), ['month']),
+                ('standard-year', StandardScaler(), ['year']),
+            ]),
         )
         pipe_distance = make_pipeline(
             DistanceTransformer(), 
@@ -46,14 +51,25 @@ class Trainer():
         ])
 
         self.pipeline = Pipeline([
-            ('feat_eng_bloc', feat_eng_bloc),
+            ('feat_eng', feat_eng_bloc),
             ('regressor', RandomForestRegressor())
         ])
         self._mlflow_log_model()
 
+    def preprocessing_pipeline(self):
+        '''return the pipeline used to preprocessd data'''
+        if not self.pipeline:
+            self.set_pipeline()
+        return self.pipeline['feat_eng']
+
+    def preprocess(self):
+        '''return a preprocessed dataframe'''
+        return self.preprocessing_pipeline().fit_transform(self.X, self.y)
+
     def run(self):
         """set and train the pipeline"""
-        self.set_pipeline()
+        if not self.pipeline:
+            self.set_pipeline()
         return self.pipeline.fit(self.X, self.y)
 
     def evaluate(self, X_test, y_test):
