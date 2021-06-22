@@ -2,16 +2,18 @@ import joblib
 import mlflow
 from mlflow.tracking import MlflowClient
 from memoized_property import memoized_property
+from sklearn import metrics
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import cross_validate
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import RobustScaler, StandardScaler
 
 from TaxiFareModel.encoders import CyclicalTransformer, TimeFeaturesEncoder, DistanceTransformer
-from TaxiFareModel.utils import compute_rmse
+from TaxiFareModel.utils import compute_rmse, rmse_scorer
 
 MLFLOW_URI = "https://mlflow.lewagon.co/"
-EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 2"  
+EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 3"  
 
 class Trainer():
     def __init__(self, X, y):
@@ -72,11 +74,29 @@ class Trainer():
             self.set_pipeline()
         return self.pipeline.fit(self.X, self.y)
 
+    def cross_validate(self):
+        """cross validate the pipeline"""
+        if not self.pipeline:
+            self.set_pipeline()
+        cv = cross_validate(
+            self.pipeline, 
+            X, y, 
+            return_train_score=True, 
+            scoring=rmse_scorer(),
+            n_jobs=-1,
+        )
+        import ipdb; ipdb.set_trace()
+        self.mlflow_log_metric('cv_test_rmse_mean', cv['test_score'].mean())
+        self.mlflow_log_metric('cv_test_rmse_std', cv['test_score'].std())
+        self.mlflow_log_metric('cv_train_rmse_mean', cv['train_score'].mean())
+        self.mlflow_log_metric('cv_train_rmse_std', cv['train_score'].std())
+        return cv
+
     def evaluate(self, X_test, y_test):
         """evaluates the pipeline on df_test and return the RMSE"""
         assert self.pipeline is not None
         y_pred = self.pipeline.predict(X_test)
-        rmse = compute_rmse(y_pred, y_test)
+        rmse = compute_rmse(y_test, y_pred)
         self.mlflow_log_metric('rmse', rmse)
         return rmse
 
@@ -123,6 +143,7 @@ if __name__ == '__main__':
     y = data[target]
     X_train, X_test, y_train, y_test = train_test_split(X, y)
     trainer = Trainer(X_train, y_train)
+    cv = trainer.cross_validate()
     history = trainer.run()
     rmse = trainer.evaluate(X_test, y_test)
     print(f'Model RMSE is {rmse:.2f}$')
