@@ -1,4 +1,6 @@
-from TaxiFareModel.data import clean_data
+import mlflow
+from mlflow.tracking import MlflowClient
+from memoized_property import memoized_property
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.pipeline import make_pipeline, Pipeline
@@ -6,6 +8,9 @@ from sklearn.preprocessing import RobustScaler, StandardScaler
 
 from TaxiFareModel.encoders import TimeFeaturesEncoder, DistanceTransformer
 from TaxiFareModel.utils import compute_rmse
+
+MLFLOW_URI = "https://mlflow.lewagon.co/"
+EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 1"  
 
 class Trainer():
     def __init__(self, X, y):
@@ -39,11 +44,11 @@ class Trainer():
             ('distance', pipe_distance, dist_cols)
         ])
 
-        # workflow
         self.pipeline = Pipeline([
             ('feat_eng_bloc', feat_eng_bloc),
             ('regressor', RandomForestRegressor())
         ])
+        self._mlflow_log_model()
 
     def run(self):
         """set and train the pipeline"""
@@ -54,9 +59,39 @@ class Trainer():
         """evaluates the pipeline on df_test and return the RMSE"""
         assert self.pipeline is not None
         y_pred = self.pipeline.predict(X_test)
-        return compute_rmse(y_pred, y_test)
+        rmse = compute_rmse(y_pred, y_test)
+        self.mlflow_log_metric('rmse', rmse)
+        return rmse
 
+    @memoized_property
+    def mlflow_client(self):
+        mlflow.set_tracking_uri(MLFLOW_URI)
+        return MlflowClient()
 
+    @memoized_property
+    def mlflow_experiment_id(self):
+        try:
+            return self.mlflow_client.create_experiment(EXPERIMENT_NAME)
+        except BaseException:
+            return self.mlflow_client.get_experiment_by_name(EXPERIMENT_NAME).experiment_id
+
+    @memoized_property
+    def mlflow_run(self):
+        return self.mlflow_client.create_run(self.mlflow_experiment_id)
+
+    def mlflow_log_param(self, key, value):
+        self.mlflow_client.log_param(self.mlflow_run.info.run_id, key, value)
+
+    def mlflow_log_metric(self, key, value):
+        self.mlflow_client.log_metric(self.mlflow_run.info.run_id, key, value)
+
+    def _mlflow_log_model(self):
+        assert self.pipeline is not None
+        model = self.pipeline['regressor']
+        self.mlflow_log_param('model',  model.__class__())
+        for k, v in model.get_params().items():
+            self.mlflow_log_param(k, v)
+            
 if __name__ == '__main__':
     from sklearn.model_selection import train_test_split
     from TaxiFareModel.data import get_data, clean_data
