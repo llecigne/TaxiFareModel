@@ -9,11 +9,11 @@ from sklearn.model_selection import cross_validate
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import RobustScaler, StandardScaler
 
-from TaxiFareModel.encoders import CyclicalTransformer, TimeFeaturesEncoder, DistanceTransformer
+from TaxiFareModel.encoders import CyclicalTransformer, DistanceToCenterTransformer, TimeFeaturesEncoder, DistanceTransformer
 from TaxiFareModel.utils import compute_rmse, rmse_scorer
 
 MLFLOW_URI = "https://mlflow.lewagon.co/"
-EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 3"  
+EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 4"  
 
 class Trainer():
     def __init__(self, X, y):
@@ -37,8 +37,12 @@ class Trainer():
             ]),
         )
         pipe_distance = make_pipeline(
-            DistanceTransformer(), 
+            DistanceTransformer(),
             RobustScaler()
+        )
+        pipe_distance_to_center = make_pipeline(
+            DistanceToCenterTransformer(),
+            RobustScaler(),
         )
 
         dist_cols = [
@@ -49,7 +53,8 @@ class Trainer():
 
         feat_eng_bloc = ColumnTransformer([
             ('time', pipe_time, time_cols),
-            ('distance', pipe_distance, dist_cols)
+            ('distance', pipe_distance, dist_cols),
+            ('distance_to_center', pipe_distance_to_center, dist_cols),
         ])
 
         self.pipeline = Pipeline([
@@ -80,7 +85,7 @@ class Trainer():
             self.set_pipeline()
         cv = cross_validate(
             self.pipeline, 
-            X, y, 
+            self.X, self.y, 
             return_train_score=True, 
             scoring=rmse_scorer(),
             n_jobs=-1,

@@ -61,3 +61,33 @@ class CyclicalTransformer(BaseEstimator, TransformerMixin):
         X[f'{self.column}_sin'] = np.sin(angle_index * angle_step)
         X[f'{self.column}_cos'] = np.cos(angle_index * angle_step)
         return X[[f'{self.column}_sin', f'{self.column}_cos']]
+
+
+class DistanceToCenterTransformer(BaseEstimator, TransformerMixin):
+    
+    def __init__(self, center=None):
+        self.center = center
+    
+    def fit(self, X, y=None):
+        if not self.center:
+            self.center = (
+                (X['pickup_latitude'].mean()+X['dropoff_latitude'].mean())/2,
+                (X['pickup_longitude'].mean()+X['dropoff_longitude'].mean())/2,
+            )
+        return self
+    
+    def transform(self, X, y=None):
+        # fare barycentre to center
+        X['distance_to_center'] = haversine_vectorized(
+            pd.DataFrame({
+                'lat': (X['pickup_latitude']+X['dropoff_latitude'])/2,
+                'lng': (X['pickup_longitude']+X['dropoff_longitude'])/2,
+                'center_lat': self.center[0],
+                'center_lng': self.center[1],
+            }),
+            start_lat='lat',
+            start_lon='lng',
+            end_lat='center_lat',
+            end_lon='center_lng',
+        )
+        return X[['distance_to_center']]
