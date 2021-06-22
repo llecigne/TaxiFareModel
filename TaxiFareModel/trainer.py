@@ -1,3 +1,4 @@
+import joblib
 import mlflow
 from mlflow.tracking import MlflowClient
 from memoized_property import memoized_property
@@ -63,6 +64,11 @@ class Trainer():
         self.mlflow_log_metric('rmse', rmse)
         return rmse
 
+    def save_model(self):
+        """ Save the trained model into a model.joblib file """
+        assert self.pipeline is not None
+        joblib.dump(self.pipeline, 'model.joblib')
+
     @memoized_property
     def mlflow_client(self):
         mlflow.set_tracking_uri(MLFLOW_URI)
@@ -104,3 +110,4 @@ if __name__ == '__main__':
     history = trainer.run()
     rmse = trainer.evaluate(X_test, y_test)
     print(f'Model RMSE is {rmse:.2f}$')
+    trainer.save_model()
