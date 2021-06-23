@@ -15,12 +15,13 @@ from TaxiFareModel.utils import compute_rmse, rmse_scorer
 MLFLOW_URI = "https://mlflow.lewagon.co/"
 EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 4"  
 ''
-class Trainer():
+class Trainer(MlflowClient):
     def __init__(self, X, y):
         """
             X: pandas DataFrame
             y: pandas Series
         """
+        super().__init__(MLFLOW_URI)
         self.pipeline = None
         self.X = X
         self.y = y
@@ -61,7 +62,7 @@ class Trainer():
             ('feat_eng', feat_eng_bloc),
             ('regressor', RandomForestRegressor())
         ])
-        self._mlflow_log_model()
+        self.log_model()
 
     def preprocessing_pipeline(self):
         '''return the pipeline used to preprocessd data'''
@@ -90,7 +91,7 @@ class Trainer():
             scoring=rmse_scorer(),
             n_jobs=-1,
         )
-        self._mlflow_log_cross_validation_result(cv)
+        self.log_cross_validation_result(cv)
         return cv
 
     def evaluate(self, X_test, y_test):
@@ -98,7 +99,7 @@ class Trainer():
         assert self.pipeline is not None
         y_pred = self.pipeline.predict(X_test)
         rmse = compute_rmse(y_test, y_pred)
-        self.mlflow_log_metric('rmse', rmse)
+        self.log_metric('rmse', rmse)
         return rmse
 
     def save_model(self):
@@ -107,39 +108,34 @@ class Trainer():
         joblib.dump(self.pipeline, 'model.joblib')
 
     @memoized_property
-    def mlflow_client(self):
-        mlflow.set_tracking_uri(MLFLOW_URI)
-        return MlflowClient()
-
-    @memoized_property
     def mlflow_experiment_id(self):
         try:
-            return self.mlflow_client.create_experiment(EXPERIMENT_NAME)
+            return super().create_experiment(EXPERIMENT_NAME)
         except BaseException:
-            return self.mlflow_client.get_experiment_by_name(EXPERIMENT_NAME).experiment_id
+            return super().get_experiment_by_name(EXPERIMENT_NAME).experiment_id
 
     @memoized_property
     def mlflow_run(self):
-        return self.mlflow_client.create_run(self.mlflow_experiment_id)
+        return super().create_run(self.mlflow_experiment_id)
 
-    def mlflow_log_param(self, key, value):
-        self.mlflow_client.log_param(self.mlflow_run.info.run_id, key, value)
+    def log_param(self, key, value):
+        super().log_param(self.mlflow_run.info.run_id, key, value)
 
-    def mlflow_log_metric(self, key, value):
-        self.mlflow_client.log_metric(self.mlflow_run.info.run_id, key, value)
+    def log_metric(self, key, value):
+        super().log_metric(self.mlflow_run.info.run_id, key, value)
 
-    def _mlflow_log_model(self):
+    def log_model(self):
         assert self.pipeline is not None
         model = self.pipeline['regressor']
-        self.mlflow_log_param('model',  model.__class__())
+        self.log_param('model',  model.__class__())
         for k, v in model.get_params().items():
-            self.mlflow_log_param(k, v)
+            self.log_param(k, v)
 
-    def _mlflow_log_cross_validation_result(self, cv):
-        self.mlflow_log_metric('cv_test_rmse_mean', cv['test_score'].mean())
-        self.mlflow_log_metric('cv_test_rmse_std', cv['test_score'].std())
-        self.mlflow_log_metric('cv_train_rmse_mean', cv['train_score'].mean())
-        self.mlflow_log_metric('cv_train_rmse_std', cv['train_score'].std())
+    def log_cross_validation_result(self, cv):
+        self.log_metric('cv_test_rmse_mean', cv['test_score'].mean())
+        self.log_metric('cv_test_rmse_std', cv['test_score'].std())
+        self.log_metric('cv_train_rmse_mean', cv['train_score'].mean())
+        self.log_metric('cv_train_rmse_std', cv['train_score'].std())
             
 if __name__ == '__main__':
     from sklearn.model_selection import train_test_split
