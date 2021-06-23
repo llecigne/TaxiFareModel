@@ -14,7 +14,7 @@ from TaxiFareModel.utils import compute_rmse, rmse_scorer
 
 MLFLOW_URI = "https://mlflow.lewagon.co/"
 EXPERIMENT_NAME = "[FR] [Bordeaux] [llecigne] Taxi Fare Model 4"  
-
+''
 class Trainer():
     def __init__(self, X, y):
         """
@@ -90,10 +90,7 @@ class Trainer():
             scoring=rmse_scorer(),
             n_jobs=-1,
         )
-        self.mlflow_log_metric('cv_test_rmse_mean', cv['test_score'].mean())
-        self.mlflow_log_metric('cv_test_rmse_std', cv['test_score'].std())
-        self.mlflow_log_metric('cv_train_rmse_mean', cv['train_score'].mean())
-        self.mlflow_log_metric('cv_train_rmse_std', cv['train_score'].std())
+        self._mlflow_log_cross_validation_result(cv)
         return cv
 
     def evaluate(self, X_test, y_test):
@@ -137,6 +134,12 @@ class Trainer():
         self.mlflow_log_param('model',  model.__class__())
         for k, v in model.get_params().items():
             self.mlflow_log_param(k, v)
+
+    def _mlflow_log_cross_validation_result(self, cv):
+        self.mlflow_log_metric('cv_test_rmse_mean', cv['test_score'].mean())
+        self.mlflow_log_metric('cv_test_rmse_std', cv['test_score'].std())
+        self.mlflow_log_metric('cv_train_rmse_mean', cv['train_score'].mean())
+        self.mlflow_log_metric('cv_train_rmse_std', cv['train_score'].std())
             
 if __name__ == '__main__':
     from sklearn.model_selection import train_test_split
